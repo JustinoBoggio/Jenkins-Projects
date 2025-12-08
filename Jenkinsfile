@@ -15,18 +15,12 @@ pipeline {
                 }
             }
         }
-        // 3. Test (opcional)
-        stage('Run Tests') {
-            steps {
-                sh 'npm test'  // Si hay tests en tu app
-            }
-        }
-        // 4. Push a Docker Hub
+        // 3. Push a Docker Hub
         stage('Push to Docker Hub') {
             steps {
                 script {
                     docker.withRegistry('https://registry.hub.docker.com', 'docker-hub-creds') {
-                        docker.image("tu-usuario/reddit-clone:${env.BUILD_ID}").push()
+                        docker.image("JustinoBoggio/Jenkins-Projects:${env.BUILD_ID}").push()
                     }
                 }
             }
