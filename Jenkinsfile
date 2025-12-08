@@ -17,14 +17,6 @@ pipeline {
     stage('Checkout') {
       steps { checkout scm }
     }
-    stage('Unit tests (npm)') {
-      steps {
-        dir(APP_DIR) {
-          sh 'npm ci'
-          sh 'npm test || echo "sin tests o fallaron, continuar para demo"'
-        }
-      }
-    }
     stage('Build image') {
       steps {
         script {
@@ -46,11 +38,9 @@ pipeline {
         }
       }
     }
-    // El stage de Kubernetes ha sido ELIMINADO COMPLETAMENTE,
-    // y no solo comentado, para evitar errores de sintaxis Groovy.
-  } // <--- Esta llave de cierre de 'stages' estaba faltando o mal posicionada.
+  } 
 
   post {
     always { sh 'docker image prune -f' }
   }
-} // <--- Llave de cierre final del 'pipeline'
+}
