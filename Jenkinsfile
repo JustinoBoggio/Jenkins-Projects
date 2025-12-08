@@ -1,5 +1,5 @@
 pipeline {
-  agent { label 'docker' }
+  agent { label 'docker-agent-vm' }   // etiqueta del nodo que está online
 
   options {
     skipDefaultCheckout(true)
@@ -8,16 +8,15 @@ pipeline {
 
   environment {
     APP_DIR      = 'reddit-clone-k8s-ingress-master' // carpeta de la app
-    IMAGE_REPO   = 'tuusuario/reddit-clone'          // cambia a tu repo en Docker Hub
+    IMAGE_REPO   = 'mauriciobatista3099/reddit-clone'
     REGISTRY_URL = 'https://index.docker.io/v1/'
-    DOCKER_CREDS = 'docker-hub-creds'                // ID de credencial en Jenkins
+    DOCKER_CREDS = 'docker-hub-creds'                // credencial en Jenkins
   }
 
   stages {
     stage('Checkout') {
       steps { checkout scm }
     }
-
     stage('Unit tests (npm)') {
       steps {
         dir(APP_DIR) {
@@ -26,11 +25,9 @@ pipeline {
         }
       }
     }
-
     stage('Build image') {
       steps {
         script {
-          // tag corto de commit o BUILD_NUMBER
           def tag = env.GIT_COMMIT ? env.GIT_COMMIT.take(7) : env.BUILD_NUMBER
           env.IMAGE_TAG = tag
           dir(APP_DIR) {
@@ -39,7 +36,6 @@ pipeline {
         }
       }
     }
-
     stage('Push image') {
       steps {
         script {
@@ -50,7 +46,6 @@ pipeline {
         }
       }
     }
-
     stage('Deploy (kubectl, opcional)') {
       when {
         allOf {
