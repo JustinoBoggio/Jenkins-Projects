@@ -89,7 +89,8 @@ resource "azurerm_public_ip" "master_ip" {
   name                = "pip-jenkins-master"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
-  allocation_method   = "Dynamic"
+  sku = "Standard" 
+  allocation_method = "Static"
 }
 
 # Master NIC
@@ -142,7 +143,8 @@ resource "azurerm_public_ip" "agent_ip" {
   name                = "pip-jenkins-agent"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
-  allocation_method   = "Dynamic"
+  sku = "Standard"
+  allocation_method = "Static"
 }
 
 resource "azurerm_network_interface" "agent_nic" {
@@ -184,6 +186,13 @@ resource "azurerm_linux_virtual_machine" "agent_vm" {
   }
 
   custom_data = filebase64("agent-init.sh")
+}
+
+# --- NSG ASSOCIATION (CRITICAL for Standard IPs) ---
+# This associates the Security Group with the Subnet to allow traffic
+resource "azurerm_subnet_network_security_group_association" "nsg_association" {
+  subnet_id                 = azurerm_subnet.subnet.id
+  network_security_group_id = azurerm_network_security_group.nsg.id
 }
 
 # --- OUTPUTS ---
