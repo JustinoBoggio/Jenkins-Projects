@@ -1,5 +1,5 @@
 pipeline {
-  agent { label 'docker-agent-vm' }   // etiqueta del nodo que está online
+  agent { label 'docker-agent-vm' }  // etiqueta del nodo que está online
 
   options {
     skipDefaultCheckout(true)
@@ -7,10 +7,10 @@ pipeline {
   }
 
   environment {
-    APP_DIR      = 'reddit-clone-k8s-ingress-master' // carpeta de la app
-    IMAGE_REPO   = 'mauriciobatista3099/reddit-clone'
+    APP_DIR = 'reddit-clone-k8s-ingress-master' // carpeta de la app
+    IMAGE_REPO = 'mauriciobatista3099/reddit-clone'
     REGISTRY_URL = 'https://index.docker.io/v1/'
-    DOCKER_CREDS = 'docker-hub-creds'                // credencial en Jenkins
+    DOCKER_CREDS = 'docker-hub-creds'// credencial en Jenkins
   }
 
   stages {
@@ -46,24 +46,11 @@ pipeline {
         }
       }
     }
-    // stage('Deploy (kubectl, opcional)') {
-    //   when {
-    //     allOf {
-    //       fileExists("${APP_DIR}/k8s/deployment.yml")
-    //       fileExists("${APP_DIR}/k8s/service.yml")
-    //     }
-    //   }
-    //   steps {
-    //     withCredentials([file(credentialsId: 'kubeconfig-cluster', variable: 'KUBECONFIG')]) {
-    //       sh """
-    //         kubectl apply -f ${APP_DIR}/k8s/deployment.yml
-    //         kubectl apply -f ${APP_DIR}/k8s/service.yml
-    //       """
-    //     }
-    //   }
-    // }
+    // El stage de Kubernetes ha sido ELIMINADO COMPLETAMENTE,
+    // y no solo comentado, para evitar errores de sintaxis Groovy.
+  } // <--- Esta llave de cierre de 'stages' estaba faltando o mal posicionada.
 
   post {
     always { sh 'docker image prune -f' }
   }
-}
+} // <--- Llave de cierre final del 'pipeline'
