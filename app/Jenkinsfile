@@ -6,11 +6,15 @@ pipeline {
         CONTAINER_NAME = "python-app-test"
     }
 
-    stages {
-        stage('Clean Workspace') {
+        stage('Clean & Setup') {
             steps {
-                // Good practice: Start with a clean slate
-                cleanWs()
+                script {
+                    echo "Cleaning workspace..."
+                    cleanWs()
+                    
+                    echo "Checking out code..."
+                    checkout scm
+                }
             }
         }
 
