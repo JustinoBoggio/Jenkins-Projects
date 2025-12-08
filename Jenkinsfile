@@ -46,23 +46,22 @@ pipeline {
         }
       }
     }
-    stage('Deploy (kubectl, opcional)') {
-      when {
-        allOf {
-          fileExists("${APP_DIR}/k8s/deployment.yml")
-          fileExists("${APP_DIR}/k8s/service.yml")
-        }
-      }
-      steps {
-        withCredentials([file(credentialsId: 'kubeconfig-cluster', variable: 'KUBECONFIG')]) {
-          sh """
-            kubectl apply -f ${APP_DIR}/k8s/deployment.yml
-            kubectl apply -f ${APP_DIR}/k8s/service.yml
-          """
-        }
-      }
-    }
-  }
+    // stage('Deploy (kubectl, opcional)') {
+    //   when {
+    //     allOf {
+    //       fileExists("${APP_DIR}/k8s/deployment.yml")
+    //       fileExists("${APP_DIR}/k8s/service.yml")
+    //     }
+    //   }
+    //   steps {
+    //     withCredentials([file(credentialsId: 'kubeconfig-cluster', variable: 'KUBECONFIG')]) {
+    //       sh """
+    //         kubectl apply -f ${APP_DIR}/k8s/deployment.yml
+    //         kubectl apply -f ${APP_DIR}/k8s/service.yml
+    //       """
+    //     }
+    //   }
+    // }
 
   post {
     always { sh 'docker image prune -f' }
