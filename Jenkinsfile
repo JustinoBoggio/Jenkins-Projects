@@ -1,5 +1,5 @@
 pipeline {
-  agent { label 'docker-agent-vm' }  // etiqueta del nodo que está online
+  agent { label 'docker-agent-vm' }
 
   options {
     skipDefaultCheckout(true)
@@ -7,12 +7,14 @@ pipeline {
   }
 
   environment {
-    APP_DIR = 'reddit-clone-k8s-ingress-master' // carpeta de la app
+    APP_DIR = 'reddit-clone-k8s-ingress-master'
     IMAGE_REPO = 'mauriciobatista3099/reddit-clone'
     REGISTRY_URL = 'https://index.docker.io/v1/'
-    DOCKER_CREDS = 'docker-hub-creds'// credencial en Jenkins
+    DOCKER_CREDS = 'docker-hub-creds'
+    
+    // VARIABLES DE AZURE
     AZURE_VM_USER = 'ubuntu' 
-    AZURE_VM_IP  = '52.254.9.66' 
+    AZURE_VM_IP = '52.254.9.66' 
     SSH_CRED_ID = 'id_rsa_azure'
     CONTAINER_NAME = 'reddit-app'
   }
@@ -21,6 +23,7 @@ pipeline {
     stage('Checkout') {
       steps { checkout scm }
     }
+    
     stage('Build image') {
       steps {
         script {
@@ -32,6 +35,7 @@ pipeline {
         }
       }
     }
+    
     stage('Push image') {
       steps {
         script {
@@ -42,11 +46,11 @@ pipeline {
         }
       }
     }
-  } 
-stage('Deploy to Azure VM') {
+    
+    // NUEVO STAGE: DESPLIEGUE CONTINUO (CD)
+    stage('Deploy to Azure VM') {
       steps {
         script {
-          // Utiliza sshagent para inyectar la clave privada SSH 'id_rsa_azure'
           sshagent(credentials: [SSH_CRED_ID]) {
             sh """
               echo "1. Pulling image ${IMAGE_REPO}:${IMAGE_TAG}..."
@@ -57,7 +61,6 @@ stage('Deploy to Azure VM') {
               ssh -o StrictHostKeyChecking=no ${AZURE_VM_USER}@${AZURE_VM_IP} "docker rm ${CONTAINER_NAME} || true"
 
               echo "3. Starting new container ${CONTAINER_NAME}..."
-              # Mapeo de puerto: -p 80:3000 (acceso externo en puerto 80, interno en 3000)
               ssh -o StrictHostKeyChecking=no ${AZURE_VM_USER}@${AZURE_VM_IP} "docker run -d --name ${CONTAINER_NAME} -p 80:3000 ${IMAGE_REPO}:${IMAGE_TAG}"
             """
           }
@@ -65,6 +68,7 @@ stage('Deploy to Azure VM') {
       }
     }
   }
+
   post {
     always { sh 'docker image prune -f' }
   }
