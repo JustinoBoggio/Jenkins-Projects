@@ -3,11 +3,35 @@ pipeline {
 
     environment {
         // Name of the image and container
-        DOCKER_IMAGE = "reddit-clone:${BUILD_NUMBER}"
-        CONTAINER_NAME = "reddit-clone-app"
+        IMAGE_NAME = "reddit-clone-${env.BRANCH_NAME}"
+        CONTAINER_NAME = "reddit-app-${env.BRANCH_NAME}"
+        TAG = "${env.BUILD_NUMBER}"
         // Variable for the specific folder in the repo
         APP_DIR = "reddit-clone-k8s-ingress-master"
+
+        SONAR_TOKEN = credentials('sonarqube-token')
     }
+
+    stage('Code Analysis (SonarQube)') {
+                steps {
+                    script {
+                        echo "Starting Code Analysis..."
+                            dir('reddit-clone-k8s-ingress-master') {
+                                sh """
+                                docker run --rm \
+                                    --network=host \
+                                    -e SONAR_HOST_URL=http://10.0.1.5:9000 \
+                                    -e SONAR_LOGIN=${SONAR_TOKEN} \
+                                    -v "\$(pwd):/usr/src" \
+                                    sonarsource/sonar-scanner-cli \
+                                    -Dsonar.projectKey=reddit-clone \
+                                    -Dsonar.sources=. \
+                                    -Dsonar.exclusions=**/node_modules/**,**/dist/**
+                                """
+                        }
+                    }
+                }
+            }
 
     stages {
         stage('Build Docker Image') {
@@ -16,7 +40,7 @@ pipeline {
                     echo "Building Reddit Clone Image..."
                     // CRITICAL: We must enter the specific directory
                     dir(APP_DIR) {
-                        sh "docker build -t ${DOCKER_IMAGE} ."
+                        sh "docker build -t ${IMAGE_NAME} ."
                     }
                 }
             }
@@ -32,9 +56,7 @@ pipeline {
                     sh "docker rm ${CONTAINER_NAME} || true"
 
                     // 2. Run new container
-                    // -d: Detached mode
-                    // -p 3000:3000: Map VM port 3000 to Container port 3000
-                    sh "docker run -d -p 3000:3000 --name ${CONTAINER_NAME} ${DOCKER_IMAGE}"
+                    sh "docker run -d -p 3000:3000 --name ${CONTAINER_NAME} ${IMAGE_NAME}"
                 }
             }
         }
