@@ -62,6 +62,23 @@ pipeline {
             }
         }
 
+        stage('Security Scan (Trivy)') {
+            steps {
+                script {
+                    echo "Scanning vulnerabilities in: ${env.IMAGE_NAME}"
+                    
+                    // 1. Informative Scan (MEDIUM/HIGH)
+                    // exit-code 0: Does not break the build, just reports
+                    sh "trivy image --severity MEDIUM,HIGH --no-progress --exit-code 0 ${env.IMAGE_NAME}"
+                    
+                    // 2. Blocker Scan (CRITICAL)
+                    // exit-code 1: If finds CRITICAL vulnerabilities, breaks the build
+                    // --ignore-unfixed: Ignore vulnerabilities that have no fix available yet
+                    sh "trivy image --severity CRITICAL --no-progress --exit-code 1 --ignore-unfixed ${env.IMAGE_NAME}"
+                }
+            }
+        }
+
         stage('Push to Docker Hub') {
             steps {
                 script {
