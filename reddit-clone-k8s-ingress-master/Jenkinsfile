@@ -11,34 +11,32 @@ pipeline {
 
         SONAR_TOKEN = credentials('sonarqube-token')
     }
-
     stages {
         stage('Code Analysis (SonarQube)') {
-                    steps {
-                        script {
-                            echo "Starting Code Analysis..."
-                                dir('reddit-clone-k8s-ingress-master') {
-                                    sh """
-                                    docker run --rm \
-                                        --network=host \
-                                        -e SONAR_HOST_URL=http://10.0.1.5:9000 \
-                                        -e SONAR_LOGIN=${SONAR_TOKEN} \
-                                        -v "\$(pwd):/usr/src" \
-                                        sonarsource/sonar-scanner-cli \
-                                        -Dsonar.projectKey=reddit-clone \
-                                        -Dsonar.sources=. \
-                                        -Dsonar.exclusions=**/node_modules/**,**/dist/**
-                                    """
-                            }
-                        }
+            steps {
+                script {
+                    echo "Starting Code Analysis..."
+                    dir('reddit-clone-k8s-ingress-master') {
+                        sh """
+                            docker run --rm \
+                                --network=host \
+                                -e SONAR_HOST_URL=http://10.0.1.5:9000 \
+                                -e SONAR_TOKEN=\$SONAR_TOKEN \
+                                -v "\$(pwd):/usr/src" \
+                                sonarsource/sonar-scanner-cli \
+                                -Dsonar.projectKey=reddit-clone \
+                                -Dsonar.sources=. \
+                                -Dsonar.exclusions=**/node_modules/**,**/dist/**
+                        """
                     }
                 }
+            }
+        }
 
         stage('Build Docker Image') {
             steps {
                 script {
                     echo "Building Reddit Clone Image..."
-                    // CRITICAL: We must enter the specific directory
                     dir(APP_DIR) {
                         sh "docker build -t ${IMAGE_NAME} ."
                     }
