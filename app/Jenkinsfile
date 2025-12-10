@@ -1,5 +1,5 @@
 pipeline {
-    agent { label 'docker-agent-vm' } // Runs specifically on your Azure Agent VM
+    agent { label 'docker-agent' } // Runs specifically on your Azure Agent VM
 
     environment {
         DOCKER_IMAGE = "my-python-app:${BUILD_NUMBER}"
