@@ -1,0 +1,53 @@
+pipeline {
+    agent { label 'docker-agent' }
+
+    environment {
+        // Name of the image and container
+        DOCKER_IMAGE = "reddit-clone:${BUILD_NUMBER}"
+        CONTAINER_NAME = "reddit-clone-app"
+        // Variable for the specific folder in the repo
+        APP_DIR = "reddit-clone-k8s-ingress-master"
+    }
+
+    stages {
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    echo "Building Reddit Clone Image..."
+                    // CRITICAL: We must enter the specific directory
+                    dir(APP_DIR) {
+                        sh "docker build -t ${DOCKER_IMAGE} ."
+                    }
+                }
+            }
+        }
+
+        stage('Deploy App') {
+            steps {
+                script {
+                    echo "Deploying Reddit Clone container..."
+                    
+                    // 1. Cleanup old container (ignore errors if it doesn't exist)
+                    sh "docker stop ${CONTAINER_NAME} || true"
+                    sh "docker rm ${CONTAINER_NAME} || true"
+
+                    // 2. Run new container
+                    // -d: Detached mode
+                    // -p 3000:3000: Map VM port 3000 to Container port 3000
+                    sh "docker run -d -p 3000:3000 --name ${CONTAINER_NAME} ${DOCKER_IMAGE}"
+                }
+            }
+        }
+
+        stage('Verify') {
+            steps {
+                script {
+                    echo "Verifying deployment..."
+                    // Wait a bit for Node.js to start
+                    sh "sleep 10" 
+                    sh "curl -I http://localhost:3000"
+                }
+            }
+        }
+    }
+}
