@@ -65,7 +65,10 @@ pipeline {
                     sh "docker stop ${env.CONTAINER_NAME} || true"
                     sh "docker rm ${env.CONTAINER_NAME} || true"
 
-                    // 2. Run new container
+                    // 2. Remove any container using the same port (3000)
+                    sh "docker ps -q --filter 'publish=3000' | xargs -r docker rm -f"
+
+                    // 3. Run new container
                     sh "docker run -d -p 3000:3000 --name ${env.CONTAINER_NAME} ${env.IMAGE_NAME}"
                 }
             }
