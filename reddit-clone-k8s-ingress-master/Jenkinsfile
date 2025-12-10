@@ -12,28 +12,28 @@ pipeline {
         SONAR_TOKEN = credentials('sonarqube-token')
     }
 
-    stage('Code Analysis (SonarQube)') {
-                steps {
-                    script {
-                        echo "Starting Code Analysis..."
-                            dir('reddit-clone-k8s-ingress-master') {
-                                sh """
-                                docker run --rm \
-                                    --network=host \
-                                    -e SONAR_HOST_URL=http://10.0.1.5:9000 \
-                                    -e SONAR_LOGIN=${SONAR_TOKEN} \
-                                    -v "\$(pwd):/usr/src" \
-                                    sonarsource/sonar-scanner-cli \
-                                    -Dsonar.projectKey=reddit-clone \
-                                    -Dsonar.sources=. \
-                                    -Dsonar.exclusions=**/node_modules/**,**/dist/**
-                                """
+    stages {
+        stage('Code Analysis (SonarQube)') {
+                    steps {
+                        script {
+                            echo "Starting Code Analysis..."
+                                dir('reddit-clone-k8s-ingress-master') {
+                                    sh """
+                                    docker run --rm \
+                                        --network=host \
+                                        -e SONAR_HOST_URL=http://10.0.1.5:9000 \
+                                        -e SONAR_LOGIN=${SONAR_TOKEN} \
+                                        -v "\$(pwd):/usr/src" \
+                                        sonarsource/sonar-scanner-cli \
+                                        -Dsonar.projectKey=reddit-clone \
+                                        -Dsonar.sources=. \
+                                        -Dsonar.exclusions=**/node_modules/**,**/dist/**
+                                    """
+                            }
                         }
                     }
                 }
-            }
 
-    stages {
         stage('Build Docker Image') {
             steps {
                 script {
