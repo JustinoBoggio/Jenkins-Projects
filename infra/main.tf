@@ -93,6 +93,17 @@ resource "azurerm_network_security_group" "nsg" {
       source_address_prefix      = "*"
       destination_address_prefix = "*"
     }
+  security_rule {
+      name                       = "Reddit-Clone-Port"
+      priority                   = 1020
+      direction                  = "Inbound"
+      access                     = "Allow"
+      protocol                   = "Tcp"
+      source_port_range          = "*"
+      destination_port_range     = "3000"
+      source_address_prefix      = "*"
+      destination_address_prefix = "*"
+    }
 }
 
 # Public IP of Master
@@ -175,7 +186,7 @@ resource "azurerm_linux_virtual_machine" "agent_vm" {
   name                  = "vm-jenkins-agent"
   resource_group_name   = azurerm_resource_group.rg.name
   location              = azurerm_resource_group.rg.location
-  size                  = "Standard_B1s" # 1 vCPU, 1GB RAM
+  size                  = "Standard_B2ms" # 2 vCPU, 8GB RAM
   admin_username        = "ubuntu"
   network_interface_ids = [azurerm_network_interface.agent_nic.id]
 
