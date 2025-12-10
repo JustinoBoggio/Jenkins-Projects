@@ -2,21 +2,33 @@ pipeline {
     agent { label 'docker-agent' }
 
     environment {
-        // Name of the image and container
-        IMAGE_NAME = "reddit-clone-${env.BRANCH_NAME}"
-        CONTAINER_NAME = "reddit-app-${env.BRANCH_NAME}"
         TAG = "${env.BUILD_NUMBER}"
-        // Variable for the specific folder in the repo
         APP_DIR = "reddit-clone-k8s-ingress-master"
-
         SONAR_TOKEN = credentials('sonarqube-token')
     }
     stages {
+        stage('Setup Environment') {
+            steps {
+                script {
+                    // 1. Clean the branch name to be Docker-compatible. For example:
+                    //    feature/sonarTest  --->  feature-sonartest
+                    def cleanBranch = env.BRANCH_NAME.toLowerCase().replaceAll('/', '-')
+                    
+                    // 2. Define image and container names based on the cleaned branch name
+                    env.IMAGE_NAME = "reddit-clone-${cleanBranch}"
+                    env.CONTAINER_NAME = "reddit-app-${cleanBranch}"
+                    
+                    echo "Original Branch Name: ${env.BRANCH_NAME}"
+                    echo "Docker Fixed Name: ${env.IMAGE_NAME}"
+                }
+            }
+        }
+
         stage('Code Analysis (SonarQube)') {
             steps {
                 script {
                     echo "Starting Code Analysis..."
-                    dir('reddit-clone-k8s-ingress-master') {
+                    dir(APP_DIR) {
                         sh """
                             docker run --rm \
                                 --network=host \
@@ -36,9 +48,9 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    echo "Building Reddit Clone Image..."
+                    echo "Building Reddit Clone Image: ${env.IMAGE_NAME}"
                     dir(APP_DIR) {
-                        sh "docker build -t ${IMAGE_NAME} ."
+                        sh "docker build -t ${env.IMAGE_NAME} ."
                     }
                 }
             }
@@ -47,14 +59,14 @@ pipeline {
         stage('Deploy App') {
             steps {
                 script {
-                    echo "Deploying Reddit Clone container..."
+                    echo "Deploying Reddit Clone container: ${env.CONTAINER_NAME}"
                     
                     // 1. Cleanup old container (ignore errors if it doesn't exist)
-                    sh "docker stop ${CONTAINER_NAME} || true"
-                    sh "docker rm ${CONTAINER_NAME} || true"
+                    sh "docker stop ${env.CONTAINER_NAME} || true"
+                    sh "docker rm ${env.CONTAINER_NAME} || true"
 
                     // 2. Run new container
-                    sh "docker run -d -p 3000:3000 --name ${CONTAINER_NAME} ${IMAGE_NAME}"
+                    sh "docker run -d -p 3000:3000 --name ${env.CONTAINER_NAME} ${env.IMAGE_NAME}"
                 }
             }
         }
