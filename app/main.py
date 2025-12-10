@@ -7,7 +7,7 @@ app = Flask(__name__)
 def hello():
     # This message proves the app is running inside the container
     hostname = socket.gethostname()
-    return f"<h1>Hello from Jenkins Agent!</h1><p>Container ID: {hostname}</p>"
+    return f"<h1>Hello from Jenkins Agent!</h1><h2>And the CI/CD works</h2><p>Container ID: {hostname}</p>"
 
 if __name__ == "__main__":
     # Run on port 5000
