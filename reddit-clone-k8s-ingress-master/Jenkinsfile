@@ -18,7 +18,7 @@ pipeline {
                     def cleanBranch = env.BRANCH_NAME.toLowerCase().replaceAll('/', '-')
                     
                     // 2. Define image and container names based on the cleaned branch name
-                    env.IMAGE_NAME = "${DOCKER_HUB_USER}/reddit-clone-${cleanBranch}-${env.TAG}"
+                    env.IMAGE_NAME = "${DOCKER_HUB_USER}/reddit-clone:${cleanBranch}-${env.TAG}"
                     env.CONTAINER_NAME = "reddit-app-${cleanBranch}"
                     // 3. Set host port based on whether it's the main branch or not
                     env.HOST_PORT = (env.BRANCH_NAME == 'main') ? "3000" : "3001"
