@@ -21,16 +21,18 @@ pipeline {
                     //    feature/sonarTest  --->  feature-sonartest
                     def cleanBranch = env.BRANCH_NAME.toLowerCase().replaceAll('/', '-')
                     // 2. Define image and container names based on the cleaned branch name
-                    env.IMAGE_NAME = "${DOCKER_HUB_USER}/reddit-clone:${cleanBranch}-${env.TAG}"
+                    env.IMAGE_FULL_NAME = "${DOCKER_HUB_USER}/reddit-clone:${cleanBranch}-${env.TAG}"
                     env.CONTAINER_NAME = "reddit-app-${cleanBranch}"
-                    // 3. Set host port based on whether it's the main branch or not
-                    env.SERVICE_PORT = (env.BRANCH_NAME == 'main') ? "3000" : "3001"
-                    // 4. K3s Namespaces logic (Save it globally too!)
+                    // 3. K3s Namespaces logic (Save it globally too!)
                     env.K8S_NAMESPACE = (env.BRANCH_NAME == 'main') ? "reddit-prod" : "reddit-dev-${cleanBranch}"
+
+                    env.AGENT_IP = "40.75.127.245"
+                    env.APP_DOMAIN = "${cleanBranch}.${env.AGENT_IP}.nip.io"
                     
                     echo "Configuring deploy in port: ${env.SERVICE_PORT}"
                     echo "Original Branch Name: ${env.BRANCH_NAME}"
-                    echo "Docker Fixed Name: ${env.IMAGE_NAME}"
+                    echo "Docker Fixed Name: ${env.IMAGE_FULL_NAME}"
+                    echo "Configured Domain: ${env.APP_DOMAIN}"
                 }
             }
         }
@@ -62,9 +64,9 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    echo "Building Reddit Clone Image: ${env.IMAGE_NAME}"
+                    echo "Building Reddit Clone Image: ${env.IMAGE_FULL_NAME}"
                     dir(APP_DIR) {
-                        sh "docker build -t ${env.IMAGE_NAME} ."
+                        sh "docker build -t ${env.IMAGE_FULL_NAME} ."
                     }
                 }
             }
@@ -73,17 +75,17 @@ pipeline {
         stage('Security Scan (Trivy)') {
             steps {
                 script {
-                    echo "Scanning vulnerabilities in: ${env.IMAGE_NAME}"
+                    echo "Scanning vulnerabilities in: ${env.IMAGE_FULL_NAME}"
                     
                     // 1. Informative Scan (MEDIUM/HIGH)
                     // exit-code 0: Does not break the build, just reports
-                    sh "trivy image --severity MEDIUM,HIGH --no-progress --exit-code 0 ${env.IMAGE_NAME}"
+                    sh "trivy image --severity MEDIUM,HIGH --no-progress --exit-code 0 ${env.IMAGE_FULL_NAME}"
                     
                     // 2. Critical Scan (NON-BLOCKING for Lab purposes)
                     // We changed exit-code 1 to 0 to allow the pipeline to proceed
                     // despite critical vulnerabilities.
                     echo "⚠️ CRITICAL VULNERABILITIES DETECTED (Bypassed for Lab) ⚠️"
-                    sh "trivy image --severity CRITICAL --no-progress --exit-code 0 --ignore-unfixed ${env.IMAGE_NAME}"
+                    sh "trivy image --severity CRITICAL --no-progress --exit-code 0 --ignore-unfixed ${env.IMAGE_FULL_NAME}"
                 }
             }
         }
@@ -97,7 +99,7 @@ pipeline {
                     sh "echo $DOCKER_CREDS_PSW | docker login -u $DOCKER_CREDS_USR --password-stdin"
                     
                     // 2. Push
-                    sh "docker push ${env.IMAGE_NAME}"
+                    sh "docker push ${env.IMAGE_FULL_NAME}"
                 }
             }
         }
@@ -105,31 +107,27 @@ pipeline {
         stage('Deploy to Kubernetes (K3s)') {
             steps {
                 script {
-                    echo "Deploying to K3s Cluster..."
-                    
                     dir(APP_DIR) {
-                        echo "Target Namespace: ${env.K8S_NAMESPACE}"
-                        // 1. Create Namespace if it doesn't exist
+                        // 1. Create Namespace
                         sh "kubectl create namespace ${env.K8S_NAMESPACE} || true"
                         
-                        // 2. Inject the REAL Docker Image into the Manifest
-                        // We use 'sed' to replace the placeholder in deployment.yaml and service.yaml
-                        // Note: We use a temporary file to avoid dirtying the git repo state locally
-                        sh "sed -e 's|DOCKER_IMAGE_PLACEHOLDER|${env.IMAGE_NAME}|g' deployment.yaml > deployment_dynamic.yaml"
-                        sh "sed -e 's|SERVICE_PORT_PLACEHOLDER|${env.SERVICE_PORT}|g' service.yaml > service_dynamic.yaml"
+                        // 2. Inject Variables
+                        // Deployment (Image)
+                        sh "sed -e 's|DOCKER_IMAGE_PLACEHOLDER|${env.IMAGE_FULL_NAME}|g' deployment.yaml > deployment_dynamic.yaml"
                         
-                        // 3. Apply Manifests (Deployment & Service)
+                        // Ingress (Domain)
+                        sh "sed -e 's|HOST_PLACEHOLDER|${env.APP_DOMAIN}|g' ingress.yaml > ingress_dynamic.yaml"
+                        
+                        // 3. Apply
                         sh "kubectl apply -f deployment_dynamic.yaml -n ${env.K8S_NAMESPACE}"
-                        sh "kubectl apply -f service_dynamic.yaml -n ${env.K8S_NAMESPACE}"
+                        sh "kubectl apply -f service.yaml -n ${env.K8S_NAMESPACE}"
+                        sh "kubectl apply -f ingress_dynamic.yaml -n ${env.K8S_NAMESPACE}"
                         
-                        // 4. Force Restart to pick up new image (Ensure Rolling Update)
+                        // 4. Verify Rollout
                         sh "kubectl rollout restart deployment/reddit-clone-deployment -n ${env.K8S_NAMESPACE}"
-                        
-                        // 5. Verify Rollout Success (Wait for Pods to be Ready)
-                        // If pods fail, this command fails, and the pipeline turns RED.
                         sh "kubectl rollout status deployment/reddit-clone-deployment -n ${env.K8S_NAMESPACE}"
                         
-                        echo "✅ Deployment Successful! Access via http://40.75.127.245:${env.SERVICE_PORT}"
+                        echo "✅ Deployed! URL: http://${env.APP_DOMAIN}"
                     }
                 }
             }
@@ -138,19 +136,28 @@ pipeline {
         stage('Verify Deployment') {
             steps {
                 script {
-                    echo "Verifying Kubernetes Resources..."
+                    echo "Verifying Kubernetes Resources in Namespace: ${env.K8S_NAMESPACE}..."
                     
-                    // Show running Pods in the specific namespace
+                    // 1. Check Pods (Are they Running?)
                     sh "kubectl get pods -n ${env.K8S_NAMESPACE}"
                     
-                    // Show Service status (to see IP and Port)
+                    // 2. Check Service (Does it have a ClusterIP?)
                     sh "kubectl get svc -n ${env.K8S_NAMESPACE}"
                     
-                    // Optional: Internal Smoke Test
-                    // We spin up a temporary 'curl' pod inside the cluster to check connectivity
-                    // This is the PRO way to test because it tests internal DNS resolution
-                    echo "Running internal smoke test..."
-                    sh "kubectl run curl-test --image=curlimages/curl -n ${env.K8S_NAMESPACE} -i --rm --restart=Never -- -I http://reddit-clone-service:${env.SERVICE_PORT}"
+                    // 3. Check Ingress (Did Traefik pick it up?) <--- NUEVO
+                    sh "kubectl get ingress -n ${env.K8S_NAMESPACE}"
+                    
+                    // 4. Internal Smoke Test (The most important check)
+                    // We check if the app is reachable INSIDE the cluster.
+                    // Note: We use port 3000 hardcoded because ClusterIP always exposes 3000 
+                    // based on our simplified service.yaml
+                    echo "Running internal connectivity test..."
+                    sh "kubectl run curl-test --image=curlimages/curl -n ${env.K8S_NAMESPACE} -i --rm --restart=Never -- -I http://reddit-clone-service:3000"
+                    
+                    echo "--------------------------------------------------------"
+                    echo "✅ Application is HEALTHY inside the cluster."
+                    echo "🌍 External URL: http://${env.APP_DOMAIN}"
+                    echo "--------------------------------------------------------"
                 }
             }
         }
@@ -159,7 +166,7 @@ pipeline {
     // This block runs after all stages are completed
     post {
         success {
-            discordSend description: "✅ **Build Succeeded!**\n\n**Project:** Reddit Clone\n**Branch:** ${env.BRANCH_NAME}\n**Image:** ${env.IMAGE_NAME}\n**URL:** [View Build](${env.BUILD_URL})", 
+            discordSend description: "✅ **Build Succeeded!**\n\n**Project:** Reddit Clone\n**Branch:** ${env.BRANCH_NAME}\n**Image:** ${env.IMAGE_FULL_NAME}\n**URL:** [View Build](${env.BUILD_URL})", 
                         footer: "DevSecOps Pipeline • Jenkins", 
                         link: env.BUILD_URL, 
                         result: 'SUCCESS', 

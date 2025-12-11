@@ -6,10 +6,7 @@ spec:
   selector:
     app: reddit-clone
   ports:
-# CHANGE: Use a placeholder for the external port
-    - port: SERVICE_PORT_PLACEHOLDER
-    # KEEP: The container always listens on 3000
-      targetPort: 3000
-      protocol: TCP
-  # In K3s, LoadBalancer binds to the Node IP automatically
-  type: LoadBalancer
+  - port: 3000
+    targetPort: 3000
+    protocol: TCP
+  type: ClusterIP
