@@ -9,6 +9,9 @@ pipeline {
         DOCKER_CREDS = credentials('docker-hub-credentials')
         SONAR_TOKEN = credentials('sonarqube-token')
         DISCORD_WEBHOOK = credentials('discord-webhook-url')
+
+        // Force kubectl to use the user's config file instead of the system one
+        KUBECONFIG = "/home/ubuntu/.kube/config"
     }
     stages {
         stage('Setup Environment') {
