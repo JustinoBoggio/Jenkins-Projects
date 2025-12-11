@@ -95,20 +95,43 @@ pipeline {
             }
         }
 
-        stage('Deploy App') {
+        stage('Deploy to Swarm') {
             steps {
                 script {
-                    echo "Deploying Reddit Clone container: ${env.CONTAINER_NAME} on ${env.HOST_PORT}"
+                    echo "Deploying Service to Swarm Cluster..."
                     
-                    // 1. Cleanup old container (ignore errors if it doesn't exist)
-                    sh "docker stop ${env.CONTAINER_NAME} || true"
-                    sh "docker rm ${env.CONTAINER_NAME} || true"
-
-                    // 2. Remove any container using the same port (3001 for non-main branches)
-                    sh "docker ps -q --filter 'publish=${env.HOST_PORT}' | xargs -r docker rm -f"
-
-                    // 3. Run new container
-                    sh "docker run -d -p ${env.HOST_PORT}:3000 --name ${env.CONTAINER_NAME} ${env.IMAGE_NAME}"
+                    // We use 'docker service' instead of 'docker run'
+                    // This enables Zero Downtime updates.
+                    
+                    // Logic:
+                    // 1. Check if service exists
+                    // 2. If NO -> Create it (docker service create)
+                    // 3. If YES -> Update it (docker service update)
+                    
+                    def serviceExists = sh(script: "docker service ls --filter name=${env.CONTAINER_NAME} -q", returnStdout: true).trim()
+                    
+                    if (serviceExists) {
+                        echo "Service exists. Updating image to: ${env.IMAGE_NAME}"
+                        // --update-parallelism 1: Update 1 container at a time
+                        // --update-delay 10s: Wait 10s between updates to ensure stability
+                        sh """
+                            docker service update \
+                            --image ${env.IMAGE_NAME} \
+                            --update-parallelism 1 \
+                            --update-delay 10s \
+                            ${env.CONTAINER_NAME}
+                        """
+                    } else {
+                        echo "Service does not exist. Creating new service..."
+                        // --replicas 2: We launch 2 instances for High Availability
+                        sh """
+                            docker service create \
+                            --name ${env.CONTAINER_NAME} \
+                            --replicas 2 \
+                            -p ${env.HOST_PORT}:3000 \
+                            ${env.IMAGE_NAME}
+                        """
+                    }
                 }
             }
         }
