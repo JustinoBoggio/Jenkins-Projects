@@ -105,25 +105,24 @@ pipeline {
                     echo "Deploying to K3s Cluster..."
                     
                     dir(APP_DIR) {
-                        // 1. Define Namespace based on branch
-                        // main -> 'reddit-prod'
-                        // feature/xyz -> 'reddit-dev-feature-xyz'                        
                         echo "Target Namespace: ${env.K8S_NAMESPACE}"
+                        // 1. Create Namespace if it doesn't exist
+                        sh "kubectl create namespace ${env.K8S_NAMESPACE} || true"
                         
-                        // 3. Inject the REAL Docker Image into the Manifest
+                        // 2. Inject the REAL Docker Image into the Manifest
                         // We use 'sed' to replace the placeholder in deployment.yaml and service.yaml
                         // Note: We use a temporary file to avoid dirtying the git repo state locally
                         sh "sed -e 's|DOCKER_IMAGE_PLACEHOLDER|${env.IMAGE_NAME}|g' deployment.yaml > deployment_dynamic.yaml"
                         sh "sed -e 's|SERVICE_PORT_PLACEHOLDER|${env.SERVICE_PORT}|g' service.yaml > service_dynamic.yaml"
                         
-                        // 4. Apply Manifests (Deployment & Service)
+                        // 3. Apply Manifests (Deployment & Service)
                         sh "kubectl apply -f deployment_dynamic.yaml -n ${env.K8S_NAMESPACE}"
                         sh "kubectl apply -f service_dynamic.yaml -n ${env.K8S_NAMESPACE}"
                         
-                        // 5. Force Restart to pick up new image (Ensure Rolling Update)
+                        // 4. Force Restart to pick up new image (Ensure Rolling Update)
                         sh "kubectl rollout restart deployment/reddit-clone-deployment -n ${env.K8S_NAMESPACE}"
                         
-                        // 6. Verify Rollout Success (Wait for Pods to be Ready)
+                        // 5. Verify Rollout Success (Wait for Pods to be Ready)
                         // If pods fail, this command fails, and the pipeline turns RED.
                         sh "kubectl rollout status deployment/reddit-clone-deployment -n ${env.K8S_NAMESPACE}"
                         
