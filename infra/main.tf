@@ -82,61 +82,73 @@ resource "azurerm_network_security_group" "nsg" {
     source_address_prefix      = "*"
     destination_address_prefix = "*"
   }
+  # Ingress for various apps
   security_rule {
-      name                       = "App-Python-Port"
-      priority                   = 1010
-      direction                  = "Inbound"
-      access                     = "Allow"
-      protocol                   = "Tcp"
-      source_port_range          = "*"
-      destination_port_range     = "5000"
-      source_address_prefix      = "*"
-      destination_address_prefix = "*"
-    }
+    name                       = "Ingress-port-80"
+    priority                   = 1003
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "80"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
   security_rule {
-      name                       = "Reddit-Clone-Port"
-      priority                   = 1020
-      direction                  = "Inbound"
-      access                     = "Allow"
-      protocol                   = "Tcp"
-      source_port_range          = "*"
-      destination_port_range     = "3000-3001"
-      source_address_prefix      = "*"
-      destination_address_prefix = "*"
-    }
+    name                       = "App-Python-Port"
+    priority                   = 1010
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "5000"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
   security_rule {
-      name                       = "Sonarqube-Port"
-      priority                   = 1030
-      direction                  = "Inbound"
-      access                     = "Allow"
-      protocol                   = "Tcp"
-      source_port_range          = "*"
-      destination_port_range     = "9000"
-      source_address_prefix      = "*"
-      destination_address_prefix = "*"
-    }
+    name                       = "Reddit-Clone-Port"
+    priority                   = 1020
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "3000-3001"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
   security_rule {
-      name                       = "Prometheus-Port"
-      priority                   = 1040
-      direction                  = "Inbound"
-      access                     = "Allow"
-      protocol                   = "Tcp"
-      source_port_range          = "*"
-      destination_port_range     = "9090"
-      source_address_prefix      = "*"
-      destination_address_prefix = "*"
-    }
+    name                       = "Sonarqube-Port"
+    priority                   = 1030
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "9000"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
   security_rule {
-      name                       = "Grafana-Port"
-      priority                   = 1050
-      direction                  = "Inbound"
-      access                     = "Allow"
-      protocol                   = "Tcp"
-      source_port_range          = "*"
-      destination_port_range     = "3200"
-      source_address_prefix      = "*"
-      destination_address_prefix = "*"
-    }
+    name                       = "Prometheus-Port"
+    priority                   = 1040
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "9090"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+  security_rule {
+    name                       = "Grafana-Port"
+    priority                   = 1050
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "3200"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
 }
 
 # Public IP of Master
@@ -144,8 +156,8 @@ resource "azurerm_public_ip" "master_ip" {
   name                = "pip-jenkins-master"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
-  sku = "Standard" 
-  allocation_method = "Static"
+  sku                 = "Standard"
+  allocation_method   = "Static"
 }
 
 # Master NIC
@@ -198,8 +210,8 @@ resource "azurerm_public_ip" "agent_ip" {
   name                = "pip-jenkins-agent"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
-  sku = "Standard"
-  allocation_method = "Static"
+  sku                 = "Standard"
+  allocation_method   = "Static"
 }
 
 resource "azurerm_network_interface" "agent_nic" {
