@@ -8,6 +8,7 @@ pipeline {
 
         DOCKER_CREDS = credentials('docker-hub-credentials')
         SONAR_TOKEN = credentials('sonarqube-token')
+        DISCORD_WEBHOOK = credentials('discord-webhook-url')
     }
     stages {
         stage('Setup Environment') {
@@ -121,6 +122,26 @@ pipeline {
                     sh "curl -I http://localhost:${env.HOST_PORT}"
                 }
             }
+        }
+    }
+    // --- CHATOPS: DISCORD NOTIFICATIONS ---
+    // This block runs after all stages are completed
+    post {
+        success {
+            discordSend description: "✅ **Build Succeeded!**\n\n**Project:** Reddit Clone\n**Branch:** ${env.BRANCH_NAME}\n**Image:** ${env.IMAGE_NAME}\n**URL:** [View Build](${env.BUILD_URL})", 
+                        footer: "DevSecOps Pipeline • Jenkins", 
+                        link: env.BUILD_URL, 
+                        result: 'SUCCESS', 
+                        title: "🚀 Deployment Successful", 
+                        webhookURL: env.DISCORD_WEBHOOK
+        }
+        failure {
+            discordSend description: "❌ **Build Failed**\n\n**Project:** Reddit Clone\n**Branch:** ${env.BRANCH_NAME}\n**Stage:** Check logs to see which stage failed.\n**URL:** [View Build](${env.BUILD_URL})", 
+                        footer: "DevSecOps Pipeline • Jenkins", 
+                        link: env.BUILD_URL, 
+                        result: 'FAILURE', 
+                        title: "💥 Pipeline Error", 
+                        webhookURL: env.DISCORD_WEBHOOK
         }
     }
 }
