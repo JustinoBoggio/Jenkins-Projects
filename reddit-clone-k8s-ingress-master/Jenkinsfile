@@ -9,6 +9,9 @@ pipeline {
         DOCKER_CREDS = credentials('docker-hub-credentials')
         SONAR_TOKEN = credentials('sonarqube-token')
         DISCORD_WEBHOOK = credentials('discord-webhook-url')
+
+        // Force kubectl to use the user's config file instead of the system one
+        KUBECONFIG = "/home/ubuntu/.kube/config"
     }
     stages {
         stage('Setup Environment') {
@@ -17,14 +20,15 @@ pipeline {
                     // 1. Clean the branch name to be Docker-compatible. For example:
                     //    feature/sonarTest  --->  feature-sonartest
                     def cleanBranch = env.BRANCH_NAME.toLowerCase().replaceAll('/', '-')
-                    
                     // 2. Define image and container names based on the cleaned branch name
                     env.IMAGE_NAME = "${DOCKER_HUB_USER}/reddit-clone:${cleanBranch}-${env.TAG}"
                     env.CONTAINER_NAME = "reddit-app-${cleanBranch}"
                     // 3. Set host port based on whether it's the main branch or not
-                    env.HOST_PORT = (env.BRANCH_NAME == 'main') ? "3000" : "3001"
+                    env.SERVICE_PORT = (env.BRANCH_NAME == 'main') ? "3000" : "3001"
+                    // 4. K3s Namespaces logic (Save it globally too!)
+                    env.K8S_NAMESPACE = (env.BRANCH_NAME == 'main') ? "reddit-prod" : "reddit-dev-${cleanBranch}"
                     
-                    echo "Configuring deploy in port: ${env.HOST_PORT}"
+                    echo "Configuring deploy in port: ${env.SERVICE_PORT}"
                     echo "Original Branch Name: ${env.BRANCH_NAME}"
                     echo "Docker Fixed Name: ${env.IMAGE_NAME}"
                 }
@@ -98,54 +102,55 @@ pipeline {
             }
         }
 
-        stage('Deploy to Swarm') {
+        stage('Deploy to Kubernetes (K3s)') {
             steps {
                 script {
-                    echo "Deploying Service to Swarm Cluster..."
+                    echo "Deploying to K3s Cluster..."
                     
-                    // We use 'docker service' instead of 'docker run'
-                    // This enables Zero Downtime updates.
-                    
-                    // Logic:
-                    // 1. Check if service exists
-                    // 2. If NO -> Create it (docker service create)
-                    // 3. If YES -> Update it (docker service update)
-                    
-                    def serviceExists = sh(script: "docker service ls --filter name=${env.CONTAINER_NAME} -q", returnStdout: true).trim()
-                    
-                    if (serviceExists) {
-                        echo "Service exists. Updating image to: ${env.IMAGE_NAME}"
-                        // --update-parallelism 1: Update 1 container at a time
-                        // --update-delay 10s: Wait 10s between updates to ensure stability
-                        sh """
-                            docker service update \
-                            --image ${env.IMAGE_NAME} \
-                            --update-parallelism 1 \
-                            --update-delay 10s \
-                            ${env.CONTAINER_NAME}
-                        """
-                    } else {
-                        echo "Service does not exist. Creating new service..."
-                        // --replicas 2: We launch 2 instances for High Availability
-                        sh """
-                            docker service create \
-                            --name ${env.CONTAINER_NAME} \
-                            --replicas 2 \
-                            -p ${env.HOST_PORT}:3000 \
-                            ${env.IMAGE_NAME}
-                        """
+                    dir(APP_DIR) {
+                        echo "Target Namespace: ${env.K8S_NAMESPACE}"
+                        // 1. Create Namespace if it doesn't exist
+                        sh "kubectl create namespace ${env.K8S_NAMESPACE} || true"
+                        
+                        // 2. Inject the REAL Docker Image into the Manifest
+                        // We use 'sed' to replace the placeholder in deployment.yaml and service.yaml
+                        // Note: We use a temporary file to avoid dirtying the git repo state locally
+                        sh "sed -e 's|DOCKER_IMAGE_PLACEHOLDER|${env.IMAGE_NAME}|g' deployment.yaml > deployment_dynamic.yaml"
+                        sh "sed -e 's|SERVICE_PORT_PLACEHOLDER|${env.SERVICE_PORT}|g' service.yaml > service_dynamic.yaml"
+                        
+                        // 3. Apply Manifests (Deployment & Service)
+                        sh "kubectl apply -f deployment_dynamic.yaml -n ${env.K8S_NAMESPACE}"
+                        sh "kubectl apply -f service_dynamic.yaml -n ${env.K8S_NAMESPACE}"
+                        
+                        // 4. Force Restart to pick up new image (Ensure Rolling Update)
+                        sh "kubectl rollout restart deployment/reddit-clone-deployment -n ${env.K8S_NAMESPACE}"
+                        
+                        // 5. Verify Rollout Success (Wait for Pods to be Ready)
+                        // If pods fail, this command fails, and the pipeline turns RED.
+                        sh "kubectl rollout status deployment/reddit-clone-deployment -n ${env.K8S_NAMESPACE}"
+                        
+                        echo "✅ Deployment Successful! Access via http://40.75.127.245:${env.SERVICE_PORT}"
                     }
                 }
             }
         }
 
-        stage('Verify') {
+        stage('Verify Deployment') {
             steps {
                 script {
-                    echo "Verifying deployment..."
-                    // Wait a bit for Node.js to start
-                    sh "sleep 10" 
-                    sh "curl -I http://localhost:${env.HOST_PORT}"
+                    echo "Verifying Kubernetes Resources..."
+                    
+                    // Show running Pods in the specific namespace
+                    sh "kubectl get pods -n ${env.K8S_NAMESPACE}"
+                    
+                    // Show Service status (to see IP and Port)
+                    sh "kubectl get svc -n ${env.K8S_NAMESPACE}"
+                    
+                    // Optional: Internal Smoke Test
+                    // We spin up a temporary 'curl' pod inside the cluster to check connectivity
+                    // This is the PRO way to test because it tests internal DNS resolution
+                    echo "Running internal smoke test..."
+                    sh "kubectl run curl-test --image=curlimages/curl -n ${env.K8S_NAMESPACE} -i --rm --restart=Never -- -I http://reddit-clone-service:${env.SERVICE_PORT}"
                 }
             }
         }
