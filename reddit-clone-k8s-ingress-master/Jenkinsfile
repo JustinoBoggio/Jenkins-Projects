@@ -36,16 +36,19 @@ pipeline {
                 script {
                     echo "Starting Code Analysis..."
                     dir(APP_DIR) {
+                        // We added SONAR_SCANNER_OPTS to limit memory usage to 2GB (Xmx2048m)
+                        // This prevents the Agent from crashing due to OOM (Out Of Memory).
                         sh """
                             docker run --rm \
                                 --network=host \
                                 -e SONAR_HOST_URL=http://10.0.1.5:9000 \
                                 -e SONAR_TOKEN=\$SONAR_TOKEN \
+                                -e SONAR_SCANNER_OPTS="-Xmx2048m" \
                                 -v "\$(pwd):/usr/src" \
                                 sonarsource/sonar-scanner-cli \
                                 -Dsonar.projectKey=reddit-clone \
                                 -Dsonar.sources=. \
-                                -Dsonar.exclusions=**/node_modules/**,**/dist/**
+                                -Dsonar.exclusions=**/node_modules/**,**/dist/**,**/*.test.ts,**/*.spec.ts
                         """
                     }
                 }
